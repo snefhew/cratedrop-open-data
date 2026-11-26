@@ -6,7 +6,8 @@ limited to the **3,662,868 releases that have at least one YouTube video**.
 Made by [CrateDrop](https://www.cratedrop.app), the random record digger for producers, DJs and collectors. Every row
 links to a page where the same numbers are shown as charts, with a random handful of playable records.
 
-Refreshed automatically every month when Discogs publishes a new dump.
+Refreshed automatically every month when Discogs publishes a new dump. Also on
+[Hugging Face](https://huggingface.co/datasets/cratedrop/open-record-data) and [Kaggle](https://www.kaggle.com/datasets/cratedrop/music-releases-by-style-country-and-year).
 
 ## Files
 
