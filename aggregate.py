@@ -15,6 +15,7 @@ import random
 import re
 import sys
 import unicodedata
+from sys import intern
 from collections import Counter, defaultdict
 
 MIN = {'d_style': 100, 'd_country': 100, 'd_year': 500, 'd_style_decade': 300, 'd_label': 200}
@@ -52,12 +53,12 @@ class G:
             self.decades[f'{y // 10 * 10}s'] += 1
         lab = clean_label(r.get('label'))
         if lab:
-            self.labels[lab] += 1
+            self.labels[intern(lab)] += 1
         if r.get('country') and r['country'] != 'Unknown':
-            self.countries[r['country']] += 1
+            self.countries[intern(r['country'])] += 1
         for s in r.get('styles') or []:
             if s != skip_style:
-                self.styles[s] += 1
+                self.styles[intern(s)] += 1
         for g in r.get('genres') or []:
             self.genres[g] += 1
         if r.get('format'):
@@ -72,10 +73,17 @@ class G:
             self.comp += 1
         if r.get('main'):
             self.main += 1
+        # Memory: only the top 12-15 artists/labels are published, so very large counters drop their 1-counts now
+        # and then (keeps the Pi run well under 500 MB; top entries are unaffected in practice).
+        if self.n % 5000 == 0:
+            for c in (self.artists, self.labels):
+                if len(c) > 4000:
+                    for k in [k for k, v in c.items() if v <= 1]:
+                        del c[k]
         for a in (r.get('artists') or [])[:1]:
             a = re.sub(r'\s*\(\d+\)$', '', a)
             if a and a != 'Various':
-                self.artists[a] += 1
+                self.artists[intern(a)] += 1
         # Reservoir sample of playable records (prefer main releases with an artist and a year).
         if r.get('artists') and r.get('year') and r.get('main') and r.get('videos'):
             self.seen += 1
@@ -112,31 +120,62 @@ class G:
         }
 
 
+def keys_of(r):
+    """(kind, slug, display name) for every group a release belongs to."""
+    y = r.get('year')
+    dec = f'{y // 10 * 10}s' if y and 1900 < y < 2030 else None
+    out = []
+    for s in set(r.get('styles') or []):
+        out.append(('d_style', slug(s), s, s))
+        if dec:
+            out.append(('d_style_decade', f'{slug(s)}--{dec}', f'{s}|{dec}', s))
+    c = r.get('country')
+    if c and c != 'Unknown':
+        out.append(('d_country', slug(c), c, None))
+    if y and 1900 < y < 2030:
+        out.append(('d_year', str(y), str(y), None))
+    lab = clean_label(r.get('label'))
+    if lab:
+        out.append(('d_label', slug(lab), lab, None))
+    return out
+
+
 def main(src, dst, dump):
+    """Two passes over the JSONL: pass 1 counts group sizes (small ints), pass 2 keeps full counters only for groups
+    that are big enough to publish (~4,300 of ~340,000). Peak memory stays low enough for the Pi."""
     random.seed(42)
-    groups = defaultdict(G)
-    names = {}
+    sizes = Counter()
     total = 0
     with open(src, encoding='utf-8') as fh:
         for line in fh:
-            r = json.loads(line)
             total += 1
-            y = r.get('year')
-            dec = f'{y // 10 * 10}s' if y and 1900 < y < 2030 else None
-            for s in set(r.get('styles') or []):
-                k = ('d_style', slug(s)); names[k] = s; groups[k].add(r, skip_style=s)
-                if dec:
-                    k2 = ('d_style_decade', f'{slug(s)}--{dec}'); names[k2] = f'{s}|{dec}'; groups[k2].add(r, skip_style=s)
-            c = r.get('country')
-            if c and c != 'Unknown':
-                k = ('d_country', slug(c)); names[k] = c; groups[k].add(r)
-            if y and 1900 < y < 2030:
-                k = ('d_year', str(y)); names[k] = str(y); groups[k].add(r)
-            lab = clean_label(r.get('label'))
-            if lab:
-                k = ('d_label', slug(lab)); names.setdefault(k, lab); groups[k].add(r)
-            if total % 500_000 == 0:
-                print(f'{total:,} read, {len(groups):,} groups', file=sys.stderr, flush=True)
+            for kind, sl, _, _ in keys_of(json.loads(line)):
+                if sl:
+                    sizes[(kind, sl)] += 1
+            if total % 1_000_000 == 0:
+                print(f'pass 1: {total:,} read, {len(sizes):,} groups', file=sys.stderr, flush=True)
+    keep = {k for k, n in sizes.items() if n >= MIN[k[0]]}
+    sizes = {k: sizes[k] for k in keep}
+    print(f'pass 1 done: {total:,} releases, {len(keep):,} groups to aggregate', file=sys.stderr, flush=True)
+
+    groups = {}
+    names = {}
+    seen = 0
+    with open(src, encoding='utf-8') as fh:
+        for line in fh:
+            r = json.loads(line)
+            seen += 1
+            for kind, sl, name, skip in keys_of(r):
+                k = (kind, sl)
+                if k not in keep:
+                    continue
+                g = groups.get(k)
+                if g is None:
+                    g = groups[k] = G()
+                names.setdefault(k, name)
+                g.add(r, skip_style=skip)
+            if seen % 1_000_000 == 0:
+                print(f'pass 2: {seen:,} read', file=sys.stderr, flush=True)
 
     rows = 0
     q = lambda s: "'" + s.replace("'", "''") + "'"

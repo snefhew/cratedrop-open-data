@@ -1,10 +1,12 @@
 # CrateDrop open record data
 
-Aggregate statistics about recorded music releases, built from the **Discogs monthly data dump of 1 November 2026**
-(CC0), limited to the **3,662,868 releases that have at least one YouTube video** (out of 19,575,942 releases).
+Aggregate statistics about recorded music releases, built from the **Discogs monthly data dump of 1 November 2026** (CC0),
+limited to the **3,662,868 releases that have at least one YouTube video**.
 
 Made by [CrateDrop](https://www.cratedrop.app), the random record digger for producers, DJs and collectors. Every row
 links to a page where the same numbers are shown as charts, with a random handful of playable records.
+
+Refreshed automatically every month when Discogs publishes a new dump.
 
 ## Files
 
@@ -24,7 +26,8 @@ links to a page where the same numbers are shown as charts, with a random handfu
 - `seven_inch_share`, `lp_share`: share with the 7" or LP format description.
 - `reissue_share`, `compilation_share`: share marked Reissue/Repress or Compilation.
 - `main_release_share`: share that Discogs marks as the main release of its master.
-- `top_*`: the top entries with release counts, `;`-separated.
+- `top_*`: the top entries with release counts, `;`-separated. Artist and label lists in very large groups are
+  counted with light pruning of one-off names, which does not change the top entries in practice.
 
 ## How it was made
 
@@ -35,5 +38,3 @@ group. Both scripts are in this repository. Release data only: no images, no use
 
 Public domain ([CC0 1.0](LICENSE)), like the Discogs data it comes from. A link back is appreciated:
 "Source: CrateDrop (cratedrop.app), from the Discogs data dump of 1 November 2026."
-
-Refreshed when Discogs publishes a new monthly dump.
